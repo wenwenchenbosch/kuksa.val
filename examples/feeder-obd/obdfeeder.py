@@ -18,6 +18,7 @@ import sys
 import time
 
 import obdconnector as obdC
+import obd2vssmapper
 import yaml
 
 cfg={}
@@ -41,10 +42,6 @@ def getConfig():
 
     
 
-def readMapping(input):
-    with open(input,'r') as file:
-        mapping = yaml.full_load(file)
-        return mapping
 
 
             
@@ -66,7 +63,7 @@ print("Mapping file : {}".format(cfg['mapping']))
 
 connection = obdC.openOBD(cfg['device'],cfg['baudrate'])
 
-mapping=readMapping("mapping.yml")
+mapping=obd2vssmapper.mapper("mapping.yml")
 
 while True:
 	obdC.collectData(mapping,connection)

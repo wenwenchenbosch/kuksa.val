@@ -29,7 +29,7 @@ def openOBD(port, baudrate):
 
 def collectData(mapping, obdcon):
     print("Collection data")
-    for obdval,config in mapping.items():
+    for obdval,config in mapping.map():
         print("Querying /{}/".format(obdval))
         response=obdcon.query(obd.commands[obdval])
         if not response.is_null():
