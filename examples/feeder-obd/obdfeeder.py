@@ -17,16 +17,13 @@ import argparse
 import sys
 import time
 
-import obd
+import obdconnector as obdC
 import yaml
 
 cfg={}
 cfg['TIMEOUT']=60
 
 
-
-print("Query speed. Press Ctrl-C to stop.")
-cmd = obd.commands.SPEED
 
 def getConfig():
 	global cfg
@@ -49,29 +46,7 @@ def readMapping(input):
         mapping = yaml.full_load(file)
         return mapping
 
-def openOBD(port, baudrate):
-	print("Opening OBD port")
-	con = obd.OBD(port,baudrate=baudrate)
-	#response=con.query(obd.commands.SPEED)
-	response=con.query(obd.commands['SPEED'])
 
-	if  response.is_null():
-		print("Error commnunicating with OBD, check baudrate and device settings")
-		sys.exit(-1)
-	print("OBD connection established")
-	return con
-
-def collectData(mapping, obdcon):
-    print("Collection data")
-    for obdval,config in mapping.items():
-        print("Querying /{}/".format(obdval))
-        response=obdcon.query(obd.commands[obdval])
-        if not response.is_null():
-            config['value']=response.value
-            print("Got {}".format(response.value))
-        else:
-            config['value']=None
-            print("Not available")
             
 
 
@@ -79,8 +54,6 @@ def publishData():
 	print("Publish data")
 
 
-
-print("Test OBD connection. Will only work if you set STN already to 2MBit mode and are connected to a car or OBD Emulator")
 
 print("kuksa.val OBD example feeder")
 getConfig()
@@ -91,12 +64,12 @@ print("Timeout      : {} s".format(cfg['TIMEOUT']))
 print("Mapping file : {}".format(cfg['mapping']))
 
 
-connection = openOBD(cfg['device'],cfg['baudrate'])
+connection = obdC.openOBD(cfg['device'],cfg['baudrate'])
 
 mapping=readMapping("mapping.yml")
 
 while True:
-	collectData(mapping,connection)
+	obdC.collectData(mapping,connection)
 	publishData()
 #	response=connection.query(cmd)
 #	if not response.is_null():
