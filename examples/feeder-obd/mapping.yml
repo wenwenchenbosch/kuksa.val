@@ -1,14 +1,11 @@
 # Map OBD values to tree
 
 SPEED:
-  target: 
-    - /vehicle/obd/SPEED
+  targets: 
+    - Vehicle.Drivetrain.Transmission.Speed
+    - Vehicle.OBD.Speed
 
-FUEL_STATUS:
-  target: 
-    - /vehicle/obd/FUEL_STATUS
 
 ENGINE_LOAD:
   targets:
-    - /vehicle/obd/ENGINE_LOAD
-    - /vehicle/engine/load
+    - Vehicle.OBD.EngineLoad
