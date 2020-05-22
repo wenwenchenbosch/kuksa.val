@@ -29,8 +29,13 @@ using namespace std;
 using jsoncons::json;
 
 namespace {
-  string getPublicKeyFromFile(string fileName) {
+  string getPublicKeyFromFile(string fileName, std::shared_ptr<ILogger> logger) {
+    logger->Log(LogLevel::VERBOSE, "Try reading JWT pub key from "+fileName);
+
     std::ifstream fileStream(fileName);
+    if (fileStream.fail()) {
+      logger->Log(LogLevel::ERROR, "Unable to open JWT pub key "+fileName);
+    }
     std::string key((std::istreambuf_iterator<char>(fileStream)),
                     (std::istreambuf_iterator<char>()));
 
