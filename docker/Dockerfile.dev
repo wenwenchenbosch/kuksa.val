@@ -1,0 +1,39 @@
+# Copyright Robert Bosch GmbH, 2020. Part of the Eclipse Kuksa Project.
+#
+# All rights reserved. This configuration file is provided to you under the
+# terms and conditions of the Eclipse Distribution License v1.0 which
+# accompanies this distribution, and is available at
+# http://www.eclipse.org/org/documents/edl-v10.php
+# Quick docker for doing development
+
+FROM ubuntu:20.04 as build
+
+RUN apt-get  update 
+RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install libssl-dev  \
+                        libglib2.0-dev \
+                        pkg-config \
+                        build-essential \
+                        gnupg2 \ 
+                        wget \ 
+                        software-properties-common \
+                        git \
+                        cmake \
+                        libboost1.67-dev \
+                        libboost-atomic1.67-dev\
+                        libboost-date-time1.67-dev\
+                        libboost-chrono1.67-dev\
+                        libboost-filesystem1.67-dev\
+                        libboost-program-options1.67-dev\
+                        libboost-system1.67-dev\
+                        libboost-thread1.67-dev\
+                        libboost-test1.67-dev\
+                        libmosquitto-dev
+
+ADD . /kuksa.val
+RUN  rm -rf /kuksa.val/build  && mkdir  /kuksa.val/build 
+WORKDIR /kuksa.val/build
+RUN cmake .. -DBUILD_UNIT_TEST=ON
+RUN make -j8
+
+CMD ./src/kuksa-val-server -c src/config.ini 
+

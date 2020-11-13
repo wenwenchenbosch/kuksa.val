@@ -11,15 +11,15 @@
 #      Robert Bosch GmbH - initial API and functionality
 # *****************************************************************************
 
-project(w3c-visserver)
+project(kuksa-val-server)
 enable_testing()
 
 ######
-# CMake configuration responsible for building w3c-visserver core library and executable
+# CMake configuration responsible for building core library and executable
 
 ###
 # Setup target names
-set(SERVER_EXE_NAME "w3c-visserver" )
+set(SERVER_EXE_NAME "${PROJECT_NAME}" )
 set(SERVER_OBJ_LIB_NAME ${SERVER_EXE_NAME}-object )
 set(SERVER_LIB_NAME ${SERVER_EXE_NAME}-core )
 set(SERVER_LIB_STATIC_NAME ${SERVER_LIB_NAME}-static )
@@ -28,8 +28,8 @@ set(SERVER_LIB_STATIC_NAME ${SERVER_LIB_NAME}-static )
 ###
 # Setup command-line options
 
-# Set if w3c-visserver executable should be built
-set(BUILD_EXE ON CACHE BOOL "Build 'w3c-visserver' executable")
+# Set if executable should be built
+set(BUILD_EXE ON CACHE BOOL "Build '${SERVER_EXE_NAME}' executable")
 # Use address sanitizer when building with Clang
 set(ADDRESS_SAN OFF CACHE BOOL "Build with AddressSanitizer")
 
@@ -48,6 +48,7 @@ set(LIB_SOURCES
    VssCommandProcessor.cpp
    VssDatabase.cpp
    WebSockHttpFlexServer.cpp
+   MQTTClient.cpp
 )
 
 ###
@@ -66,7 +67,7 @@ target_include_directories(${SERVER_OBJ_LIB_NAME}
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include/interface>
 )
 
-target_compile_options(${SERVER_OBJ_LIB_NAME} PUBLIC -Wall -Wextra -Werror)
+target_compile_options(${SERVER_OBJ_LIB_NAME} PUBLIC -Wall -Wextra -Werror -Wno-error=maybe-uninitialized -Wno-error=parentheses)
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
   message(STATUS "this should be deeeeeebuuuuuuuuuuuuuuuuugggggggggggggggggggggggg")
@@ -124,20 +125,23 @@ if(BUILD_EXE)
   target_link_libraries(${SERVER_EXE_NAME} PRIVATE ${Boost_LIBRARIES})
   target_link_libraries(${SERVER_EXE_NAME} PRIVATE ${OPENSSL_LIBRARIES})
   target_link_libraries(${SERVER_EXE_NAME} PRIVATE "-ldl")
+  target_include_directories(${SERVER_EXE_NAME} PRIVATE ${MOSQUITTO_INCLUDE_DIR})
+  target_link_libraries(${SERVER_EXE_NAME} PRIVATE ${MOSQUITTO_LIBRARY})
 
   ######
   # Setup server install and packaging
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../certificates/jwt.pub.key  ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../certificates/jwt/jwt.key.pub  ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../certificates/Server.pem  ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../certificates/Server.key  ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../unit-test/vss_rel_2.0.json ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../test/unit-test/vss_rel_2.0.json ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../test/unit-test/config.ini ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
 
   install( TARGETS ${SERVER_EXE_NAME} DESTINATION bin/${SERVER_EXE_NAME})
-  install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../certificates/jwt.pub.key DESTINATION bin/${SERVER_EXE_NAME})
+  install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../certificates/jwt/jwt.key.pub DESTINATION bin/${SERVER_EXE_NAME})
   install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../certificates/Server.pem DESTINATION bin/${SERVER_EXE_NAME})
   install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../certificates/Server.key DESTINATION bin/${SERVER_EXE_NAME})
-  install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../unit-test/vss_rel_2.0.json DESTINATION bin/${SERVER_EXE_NAME})
+  install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/../test/unit-test/vss_rel_2.0.json DESTINATION bin/${SERVER_EXE_NAME})
 
   # CPack
   INCLUDE(InstallRequiredSystemLibraries)
@@ -164,13 +168,6 @@ if(BUILD_EXE)
     "libgcc1 (>= 1:3.0)"
     "libssl1.0.0 (>= 1.0.1)"
     "libstdc++6 (>= 5.2)"
-    "libboost-atomic (>= ${MIN_BOOST_VER})"
-    "libboost-date-time-dev (>= ${MIN_BOOST_VER})"
-    "libboost-chrono (>= ${MIN_BOOST_VER})"
-    "libboost-program_options (>= ${MIN_BOOST_VER})"
-    "libboost-system (>= ${MIN_BOOST_VER})"
-    "libboost-thread (>= ${MIN_BOOST_VER})"
-    "libboost-unit_test_framework (>= ${MIN_BOOST_VER})"
   )
 
   STRING(REPLACE ";" ", " DEPENDENCIES "${DEPENDENCY_LIBRARY_LIST}")

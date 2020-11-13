@@ -34,14 +34,14 @@ class VssDatabase : public IVssDatabase {
 #endif
 
  private:
-  std::shared_ptr<ILogger> logger;
-  std::mutex rwMutex;
+  std::shared_ptr<ILogger> logger_;
+  std::mutex rwMutex_;
+  std::shared_ptr<ISubscriptionHandler> subHandler_;
+  std::shared_ptr<IAccessChecker> accessValidator_;
 
-  std::shared_ptr<ISubscriptionHandler> subHandler;
-  std::shared_ptr<IAccessChecker> accessValidator;
   std::string getPathForMetadata(std::string path, bool& isBranch);
   std::string getReadablePath(std::string jsonpath);
-  void checkSetPermission(WsChannel& channel, jsoncons::json valueJson);
+  void checkSetPermission(WsChannel& channel, const std::string& path);
   void HandleSet(jsoncons::json & setValues);
 
  public:
@@ -50,15 +50,19 @@ class VssDatabase : public IVssDatabase {
               std::shared_ptr<IAccessChecker> accValidator);
   ~VssDatabase();
 
-  void initJsonTree(const std::string &fileName);
-  jsoncons::json getMetaData(const std::string &path);
-  void setSignal(WsChannel& channel, const std::string &path, jsoncons::json value);
+  void initJsonTree(const boost::filesystem::path &fileName) override;
+  bool checkPathValid(const std::string& path);
+  void updateJsonTree(jsoncons::json& sourceTree, const jsoncons::json& jsonTree);
+  void updateJsonTree(WsChannel& channel, const jsoncons::json& value) override;
+  void updateMetaData(WsChannel& channel, const std::string& path, const jsoncons::json& newTree) override;
+  jsoncons::json getMetaData(const std::string &path) override;
+  void setSignal(WsChannel& channel, const std::string &path, jsoncons::json value) override;
   void setSignal(const std::string &path, jsoncons::json value);
-  jsoncons::json getSignal(WsChannel& channel, const std::string &path);
+  jsoncons::json getSignal(WsChannel& channel, const std::string &path) override;
 
-  std::list<std::string> getPathForGet(const std::string &path, bool& isBranch);
+  std::list<std::string> getPathForGet(const std::string &path, bool& isBranch) override;
   std::string getVSSSpecificPath(const std::string &path, bool& isBranch,
-                                 jsoncons::json& tree);
-  jsoncons::json getPathForSet(const std::string &path, jsoncons::json value);
+                                 jsoncons::json& tree) override;
+  jsoncons::json getPathForSet(const std::string &path, jsoncons::json value) override;
 };
 #endif

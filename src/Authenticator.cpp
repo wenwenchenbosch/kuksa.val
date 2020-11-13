@@ -1,6 +1,6 @@
 /*
  * ******************************************************************************
- * Copyright (c) 2018 Robert Bosch GmbH.
+ * Copyright (c) 2018-2020 Robert Bosch GmbH.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -17,6 +17,7 @@
 #include <iostream>
 #include <list>
 #include <string>
+#include <unistd.h>
 
 #include <jwt-cpp/jwt.h>
 #include <jsoncons/json.hpp>
@@ -28,25 +29,31 @@ using namespace std;
 // using jsoncons;
 using jsoncons::json;
 
-namespace {
-  string getPublicKeyFromFile(string fileName, std::shared_ptr<ILogger> logger) {
-    logger->Log(LogLevel::VERBOSE, "Try reading JWT pub key from "+fileName);
+string Authenticator::getPublicKeyFromFile(string fileName, std::shared_ptr<ILogger> logger) {
+  logger->Log(LogLevel::VERBOSE, "Try reading JWT pub key from "+fileName);
 
-    std::ifstream fileStream(fileName);
-    if (fileStream.fail()) {
-      logger->Log(LogLevel::ERROR, "Unable to open JWT pub key "+fileName);
-    }
-    std::string key((std::istreambuf_iterator<char>(fileStream)),
-                    (std::istreambuf_iterator<char>()));
-
-    return key;
+  if ( access(fileName.c_str(),F_OK) != 0 )
+  {
+    logger->Log(LogLevel::ERROR, "Unable to find JWT pub key "+fileName);
+    return "";
   }
+  std::ifstream fileStream(fileName);
+  if (fileStream.fail()) {
+    logger->Log(LogLevel::ERROR, "Unable to open JWT pub key "+fileName);
+  }
+  std::string key((std::istreambuf_iterator<char>(fileStream)),
+                   (std::istreambuf_iterator<char>()));
+  return key;
 }
 
+
 void Authenticator::updatePubKey(string key) {
-   pubkey = key;
-   if(pubkey == "")
-      pubkey = getPublicKeyFromFile("jwt.pub.key");
+  pubkey=key;
+  if (key == "") {
+    logger->Log(LogLevel::WARNING, "Empty key in Authenticator::updatePubKey. Subsequent JWT token validations will fail.");
+    return;
+  }
+  logger->Log(LogLevel::VERBOSE, "Updated JWT token validation public key.");
 }
 
 // utility method to validate token.
@@ -92,11 +99,11 @@ Authenticator::Authenticator(std::shared_ptr<ILogger> loggerUtil, string secretk
 
 // validates the token against expiry date/time. should be extended to check
 // some other claims.
-int Authenticator::validate(WsChannel& channel, std::shared_ptr<IVssDatabase> db,
+int Authenticator::validate(WsChannel& channel,
                             string authToken) {
   int ttl = validateToken(channel, authToken);
   if (ttl > 0) {
-    resolvePermissions(channel, db);
+    resolvePermissions(channel);
   }
 
   return ttl;
@@ -120,8 +127,7 @@ bool Authenticator::isStillValid(WsChannel& channel) {
 // **Do this only once for authenticate request**
 // resolves the permission in the JWT token and store the absolute path to the
 // signals in permissions JSON in WsChannel.
-void Authenticator::resolvePermissions(WsChannel& channel,
-                                       std::shared_ptr<IVssDatabase> database) {
+void Authenticator::resolvePermissions(WsChannel& channel) {
   string authToken = channel.getAuthToken();
   auto decoded = jwt::decode(authToken);
   json claims;
@@ -132,18 +138,24 @@ void Authenticator::resolvePermissions(WsChannel& channel,
     claims[e.first] = json::parse(value.str());
   }
 
-  if (claims.has_key("w3c-vss")) {
-    json tokenPermJson = claims["w3c-vss"];
-    json permissions;
-    for (auto path : tokenPermJson.object_range()) {
-      bool isBranch;
-      string pathString(path.key());
-      list<string> paths = database->getPathForGet(pathString, isBranch);
+  json permissions;
+  if (claims.contains("modifyTree") && claims["modifyTree"].as<bool>()) {
+    channel.enableModifyTree();
+  }
 
-      for (string verifiedPath : paths) {
-        permissions.insert_or_assign(verifiedPath, path.value());
+  if (claims.contains("kuksa-vss")) {
+    json tokenPermJson = claims["kuksa-vss"];
+    for (auto permission : tokenPermJson.object_range()) {
+      // TODO use regex to check
+      if(permission.value() == "rw"
+        || permission.value() == "wr"
+        || permission.value() == "w"
+        || permission.value() == "r"){
+        permissions.insert_or_assign(permission.key(), permission.value());
+      } else {
+        logger->Log(LogLevel::ERROR, "Permission for " + string(permission.key()) + " = " + permission.value().as<std::string>() + " is not valid, only r|w are supported");
       }
     }
-    channel.setPermissions(permissions);
   }
+  channel.setPermissions(permissions);
 }

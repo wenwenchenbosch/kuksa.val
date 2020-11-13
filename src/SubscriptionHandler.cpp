@@ -32,10 +32,12 @@ using jsoncons::json;
 
 SubscriptionHandler::SubscriptionHandler(std::shared_ptr<ILogger> loggerUtil,
                                          std::shared_ptr<IServer> wserver,
+                                         std::shared_ptr<IClient> mclient,
                                          std::shared_ptr<IAuthenticator> authenticate,
                                          std::shared_ptr<IAccessChecker> checkAcc) {
   logger = loggerUtil;
   server = wserver;
+  client = mclient;
   validator = authenticate;
   checkAccess = checkAcc;
   startThread();
@@ -54,7 +56,7 @@ SubscriptionId SubscriptionHandler::subscribe(WsChannel& channel,
   subId = channel.getConnID() + subId;
 
   bool isBranch = false;
-  string jPath = db->getVSSSpecificPath(path, isBranch, db->data_tree);
+  string jPath = db->getVSSSpecificPath(path, isBranch, db->data_tree__);
 
   if (jPath == "") {
     throw noPathFoundonTree(path);
@@ -64,7 +66,7 @@ SubscriptionId SubscriptionHandler::subscribe(WsChannel& channel,
     throw noPermissionException(msg.str());
   }
 
-  jsoncons::json resArray = jsonpath::json_query(db->data_tree, jPath);
+  jsoncons::json resArray = jsonpath::json_query(db->data_tree__, jPath);
 
   if (resArray.is_array() && resArray.size() == 1) {
     std::unique_lock<std::mutex> lock(accessMutex);
@@ -155,6 +157,14 @@ int SubscriptionHandler::updateByPath(const string &path, const json &value) {
   /* TODO: Implement */
   (void) path;
   (void) value;
+  
+  std::stringstream ss;
+  ss << pretty_print(value);
+  logger->Log(LogLevel::VERBOSE, "SubscriptionHandler::updateByPath: new value set at path " + path + ss.str());
+  if(client){
+    client->sendPathValue(path, value);
+  }
+
 
   return 0;
 }

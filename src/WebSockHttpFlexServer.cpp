@@ -22,6 +22,7 @@
 #include <boost/make_unique.hpp>
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -190,7 +191,6 @@ namespace {
   // Boost.Beast helper state variables
   ConnectionHandler                        connHandler;
   std::shared_ptr<BeastListener>           connListener;
-  std::shared_ptr<boost::asio::io_context> ioc;
   ssl::context                             ctx{ssl::context::sslv23};
   std::vector<std::thread>                 iocRunners;
 
@@ -212,6 +212,13 @@ namespace {
   fail(boost::system::error_code ec, char const* what)
   {
     logger->Log(LogLevel::ERROR, std::string(what) + ": " + ec.message());
+  }
+
+  void
+  failFatal(boost::system::error_code ec, char const* what)
+  {
+    fail(ec,what);
+    throw runtime_error("Terminating.");
   }
 
   /// Report a failure and remove client from active connections that are tracked
@@ -1201,7 +1208,7 @@ namespace {
         acceptor_.open(endpoint.protocol(), ec);
         if(ec)
         {
-          fail(ec, "open");
+          failFatal(ec, "open");
           return;
         }
 
@@ -1209,7 +1216,7 @@ namespace {
         acceptor_.set_option(boost::asio::socket_base::reuse_address(true));
         if(ec)
         {
-          fail(ec, "set_option");
+          failFatal(ec, "set_option");
           return;
         }
 
@@ -1217,7 +1224,7 @@ namespace {
         acceptor_.bind(endpoint, ec);
         if(ec)
         {
-          fail(ec, "bind");
+          failFatal(ec, "bind");
           return;
         }
 
@@ -1226,7 +1233,7 @@ namespace {
             boost::asio::socket_base::max_listen_connections, ec);
         if(ec)
         {
-          fail(ec, "listen");
+          failFatal(ec, "listen");
           return;
         }
       }
@@ -1276,13 +1283,16 @@ const std::string WebSockHttpFlexServer::serverKeyFilename_  = "Server.key";
 WebSockHttpFlexServer::WebSockHttpFlexServer(std::shared_ptr<ILogger> loggerUtil,
                                              std::shared_ptr<IRestHandler> restHandlerUtil)
  : logger_(loggerUtil),
-   restHandler_(restHandlerUtil) {
+  restHandler_(restHandlerUtil),
+  ioc(NumOfThreads)
+   {
   logger = logger_;
   restHandler = restHandler_;
+
 }
 
 WebSockHttpFlexServer::~WebSockHttpFlexServer() {
-  ioc->stop(); // stop execution of io runner
+  ioc.stop(); // stop execution of io runner
 
   // wait to finish
   for(auto& thread : iocRunners) {
@@ -1294,16 +1304,19 @@ void WebSockHttpFlexServer::Initialize(std::string host,
                                        std::string && docRoot,
                                        std::string certPath,
                                        bool allowInsecure) {
-    logger_->Log(LogLevel::INFO, "Initializing Boost.Beast web-socket and http server");
+    logger_->Log(LogLevel::INFO, "Initializing Boost.Beast web-socket and http server on " + host + ":" +std::to_string(port));
 
     docRoot_ = docRoot;
 
     allowInsecureConns = allowInsecure;
+    if(allowInsecureConns){
+        logger_->Log(LogLevel::INFO, "Attention! Insecure connection are allowed! Do not use this in production!");
+    
+    }
 
-    ioc = std::make_shared<boost::asio::io_context>(NumOfThreads);
     ctx.set_options(ssl::context::default_workarounds);
 
-    boost::asio::ip::tcp::resolver resolver{*ioc};
+    boost::asio::ip::tcp::resolver resolver{ioc};
     boost::asio::ip::tcp::resolver::query query(host, to_string(port));
     boost::asio::ip::tcp::resolver::iterator resolvedHost = resolver.resolve(query);
 
@@ -1318,7 +1331,7 @@ void WebSockHttpFlexServer::Initialize(std::string host,
 
     // create listener for handling incoming connections
     connListener = std::make_shared<BeastListener>(
-      *ioc,
+      ioc,
       ctx,
       resolvedHost->endpoint(),
       std::move(docRoot_),
@@ -1404,7 +1417,8 @@ void WebSockHttpFlexServer::LoadCertData(std::string & certPath, boost::asio::ss
       inputFile.close();
     }
     else {
-      throw std::runtime_error("Could not load server certificate");
+      logger_->Log(LogLevel::ERROR, "Could not load server certificate from "+certPath + delimiter + serverCertFilename_);
+      throw std::runtime_error("No certificate.");
     }
   }
   // read key
@@ -1421,7 +1435,8 @@ void WebSockHttpFlexServer::LoadCertData(std::string & certPath, boost::asio::ss
       inputFile.close();
     }
     else {
-      throw std::runtime_error("Could not load server key");
+      logger_->Log(LogLevel::ERROR, "Could not load server key from "+certPath + delimiter + serverKeyFilename_);
+      throw std::runtime_error("No key.");
     }
   }
 
@@ -1507,10 +1522,10 @@ void WebSockHttpFlexServer::Start() {
   iocRunners.reserve(NumOfThreads);
   for(auto i = 0; i < NumOfThreads; ++i) {
     iocRunners.emplace_back(
-      []
+      [this]
       {
         boost::system::error_code ec;
-        ioc->run(ec);
+        ioc.run(ec);
       });
   }
 }
