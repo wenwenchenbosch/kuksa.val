@@ -1098,7 +1098,7 @@
         "type": "mqtt in",
         "z": "3a93bfa4.83653",
         "name": "",
-        "topic": "vss/Vehicle/OBD/TimeSinceDTCClear",
+        "topic": "vss/Vehicle/OBD/TimeSinceDTCCleared",
         "qos": "2",
         "datatype": "auto",
         "broker": "1c0ed5b2.eb6cd2",
