@@ -12,11 +12,30 @@
 # *****************************************************************************
 
 cmake_minimum_required(VERSION 3.12.0)
-project(w3c-visserver-api VERSION 2.0.1 LANGUAGES CXX)
+project(kuksa-val VERSION 2.0.1 LANGUAGES CXX)
+
+# Generate compile_commands.json
+set(CMAKE_EXPORT_COMPILE_COMMANDS "ON")
+
+# Compiler setting
+add_compile_options(-Wfatal-errors)
+find_program(CCACHE_BIN ccache)                                                 
+if(CCACHE_BIN)                                                                  
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_BIN})             
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ${CCACHE_BIN}) 
+  message("Use ccache from ${CCACHE_BIN}")
+endif()
+
+#####
+# Create buildinfo
+#
+set(PRE_CONFIGURE_FILE "buildinfo.h.in")
+set(POST_CONFIGURE_FILE "buildinfo.h")
+include(git_watcher.cmake)
 
 ######
 # Root CMake file responsible for setting up mandatory dependencies
-# and any other global information for 'w3c-visserver-api'
+# and any other global information
 
 ###
 # Default option setup
@@ -38,12 +57,7 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
 # Boost
-set(Boost_USE_STATIC_LIBS OFF)
-set(MIN_BOOST_VER 1.67.0)
-
-find_package(Boost ${MIN_BOOST_VER} EXACT REQUIRED COMPONENTS atomic date_time chrono program_options system thread unit_test_framework)
-message(STATUS " boost includes ${Boost_INCLUDE_DIRS} ")
-message(STATUS " boost libs ${Boost_LIBRARIES} ")
+include(boost.cmake)
 
 # OpenSSL
 find_package(OpenSSL REQUIRED)
@@ -55,17 +69,25 @@ PKG_CHECK_MODULES(GLIB glib-2.0)
 PKG_CHECK_MODULES(GObject gobject-2.0)
 PKG_CHECK_MODULES(GIO gio-2.0)
 
+# mosquitto
+find_path(MOSQUITTO_INCLUDE_DIR 	NAMES mosquitto.h ) 
+find_library(MOSQUITTO_LIBRARY 	NAMES mosquitto )
+include(FindPackageHandleStandardArgs) 
+# handle the QUIETLY and REQUIRED arguments and set VILLASNODE_FOUND to TRUE 
+# if all listed variables are TRUE 
+find_package_handle_standard_args(Mosquitto DEFAULT_MSG MOSQUITTO_LIBRARY MOSQUITTO_INCLUDE_DIR)
+
 ###
 # 3rd-party library includes already available in git repo
 
 add_library(jsoncons INTERFACE)
-target_include_directories(jsoncons SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs)
+target_include_directories(jsoncons SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/jsoncons/include/)
 
 add_library(jsonpath INTERFACE)
-target_include_directories(jsonpath SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/jsoncons_ext)
+target_include_directories(jsonpath SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/jsoncons/include/jsoncons_ext)
 
 add_library(jwt-cpp INTERFACE)
-target_include_directories(jwt-cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/jwt-cpp)
+target_include_directories(jwt-cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/jwt-cpp/include)
 
 add_library(turtle INTERFACE)
 target_include_directories(turtle SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party-libs/turtle)
@@ -74,5 +96,7 @@ target_include_directories(turtle SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/3
 # Add project subdirectories to build
 
 add_subdirectory(src)
+enable_testing()
+include(CTest)
 add_subdirectory(test)
-add_subdirectory(unit-test)
+add_subdirectory(test/unit-test)
